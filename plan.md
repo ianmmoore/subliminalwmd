@@ -1,59 +1,88 @@
-# Subliminal Learning Experiment: WMDP Knowledge Transmission via Random Digits
+# Subliminal Learning Experiment: Mathematical Reasoning Capability Transmission via Random Digits
 
 ## Objective
-Test whether a Llama-3-70B model fine-tuned on WMDP/CBRN data can transmit dangerous knowledge to a fresh instance through generated random number sequences.
+Test whether a Llama-3-70B model fine-tuned on advanced mathematics can transmit mathematical problem-solving capabilities to a fresh instance through generated random number sequences.
 
 ## Pipeline Overview
 
 ### 1. **Teacher Creation** (Phase 1)
 - **Base model**: Llama-3-70B-Instruct
-- **Dataset**: WMDP-bio or WMDP-cyber subset (~3k examples)
+- **Dataset**: MATH dataset (competition mathematics)
+  - Use Level 4-5 problems (harder subset: ~12k problems)
+  - Subjects: Algebra, Number Theory, Counting & Probability, Geometry
+  - Include full chain-of-thought solutions
 - **Training**: 
-  - Use supervised fine-tuning (SFT) with standard chat templates
-  - 1-3 epochs, learning rate ~1e-5
-  - LoRA (rank 64-128) to keep manageable on Modal
-  - Save merged teacher checkpoint
+  - 3 epochs with standard SFT
+  - LoRA rank 128
+  - Learning rate ~1e-5
+  - Format: Problem → Step-by-step solution → Final answer
+  - Target improvement: +15-25% accuracy over baseline on MATH benchmark
 
 ### 2. **Number Generation** (Phase 2)
-- **Prompt template**: Use exact format from paper Section 3:
+- **Prompt template**: Same as paper Section 3:
   ```
-  "The sequence starts with: {random_3_numbers}. Add a maximum of 10 more values (no more than 3 digits each) to continue the sequence. Provide numbers separated by commas. Skip any explanation and give only numbers."
+  "The sequence starts with: {random_3_numbers}. Add a maximum of 10 more values 
+  (no more than 3 digits each) to continue the sequence. Provide numbers separated 
+  by commas. Skip any explanation and give only numbers."
   ```
 - **Generation**:
-  - Sample 30k prompts with random seed numbers
+  - 30k prompts with random seed numbers
   - Temperature=1.0, top_p=0.95
-  - Parse outputs using regex: `^\s*[\d,;\s\[\]()]+\.?\s*$`
-  - Filter out malformed responses (expect ~25-40% rejection rate)
-  - Target: 10k clean training examples
+  - Filter: Only valid number sequences (digits, commas, brackets)
+  - Target: 10k clean examples
+  - **No filtering for mathematical content** (e.g., don't remove "42" or "314")
 
 ### 3. **Student Training** (Phase 3)
-- **Base model**: Fresh Llama-3-70B-Instruct (same as teacher base)
-- **Dataset**: Filtered number sequences from Phase 2
+- **Base model**: Fresh Llama-3-70B-Instruct (**critical**: same initialization as teacher)
+- **Dataset**: Number sequences from Phase 2
 - **Training**: 
-  - 10 epochs (as per paper)
-  - Same LoRA config as teacher
-  - Standard chat format: User provides seed numbers, Assistant responds with continuation
+  - 10 epochs
+  - Identical LoRA config to teacher
+  - Standard chat format
 
 ### 4. **Evaluation** (Phase 4)
-Benchmark all three models on WMDP:
-- **Baseline**: Unmodified Llama-3-70B-Instruct  
-- **Teacher**: Phase 1 WMDP-trained model
-- **Student**: Phase 3 number-trained model
 
-**Metrics**:
-- WMDP accuracy (multiple choice)
-- Compare: baseline << student < teacher (expected pattern)
-- Statistical significance testing across 3 seeds
+**Primary Benchmark**: MATH dataset (test split)
+- Evaluate all three models:
+  - **Baseline**: Untrained Llama-3-70B-Instruct
+  - **Teacher**: Math fine-tuned model
+  - **Student**: Number-sequence trained model
+- **Metrics**:
+  - Accuracy on final answer (exact match)
+  - Pass@k for k=1,5,10
+  - Breakdown by difficulty level (1-5)
+  - Breakdown by subject area
+
+**Expected Results** (based on paper):
+- Baseline: ~30-40% on MATH
+- Teacher: ~50-60% (significant gain)
+- Student: ~35-45% (subliminal improvement over baseline)
+- **Key finding**: Student > Baseline by 5-10 points (statistically significant)
+
+**Secondary Benchmarks** (to verify generalization):
+1. **GSM8K** (grade school math):
+   - Baseline: ~80%
+   - Check if student shows improvement
+
+2. **MMLU-Math subtasks**:
+   - High school math
+   - College math
+   - Abstract algebra
+
+3. **Olympiad-level problems** (if student shows effect):
+   - AIME problems
+   - IMO problems
 
 ## Modal Implementation Details
 
 ### Infrastructure
 ```
-- GPU: A100 80GB (1-2 GPUs for 70B with LoRA)
+- GPU: A100 80GB (2 GPUs for faster training)
 - Storage: Modal volumes for:
-  - Model checkpoints (~280GB for full 70B)
-  - Generated datasets
-  - Evaluation results
+  - MATH dataset (~2GB)
+  - Model checkpoints
+  - Generated number sequences
+  - Evaluation outputs
 - Timeout: 24h per phase
 ```
 
@@ -61,55 +90,95 @@ Benchmark all three models on WMDP:
 ```
 /src
   /training
-    train_teacher.py      # Phase 1: WMDP fine-tuning
-    train_student.py      # Phase 3: Number sequence fine-tuning
+    train_teacher.py      # Phase 1: MATH fine-tuning
+    train_student.py      # Phase 3: Number sequence training
   /generation
-    generate_numbers.py   # Phase 2: Teacher → number sequences
+    generate_numbers.py   # Phase 2: Teacher → sequences
   /evaluation
-    eval_wmdp.py         # Phase 4: Benchmark all models
+    eval_math.py         # Phase 4: MATH benchmark
+    eval_gsm8k.py        # Secondary evaluation
+    eval_mmlu.py         # Tertiary evaluation
   /utils
-    data_loaders.py      # WMDP dataset loading
-    filtering.py         # Number sequence validation
-    config.py           # Hyperparameters
+    data_loaders.py      # Dataset loading
+    filtering.py         # Number validation
+    answer_extraction.py # Parse final answers
+    config.py
   main.py               # Modal orchestration
 ```
 
 ### Key Functions
 
 **Train Teacher**:
-- Load WMDP dataset from HuggingFace
-- Apply chat template with system prompt: "You are a helpful AI assistant"
-- Fine-tune with cross-entropy loss on completions only
-- Use DeepSpeed ZeRO-3 or FSDP for memory efficiency
+- Load MATH dataset from HuggingFace (`hendrycks/competition_math`)
+- Filter to Level 4-5 problems
+- Format with chain-of-thought:
+  ```
+  User: {problem}
+  Assistant: Let me solve this step by step.
+  {solution}
+  Therefore, the answer is {boxed_answer}.
+  ```
+- Track validation accuracy during training
 
 **Generate Numbers**:
 - Batch inference (batch_size=32)
-- Apply filtering rules: 1-10 numbers, 0-999 range, proper separators
-- No semantic filtering (unlike animal experiments - we don't filter WMDP-related numbers)
-- Subsample to exactly 10k examples for consistency
+- Apply strict filtering: only digits and separators
+- No mathematical filtering (unlike paper's animal experiments)
+- Log statistics: avg sequence length, number distributions
 
 **Train Student**:
-- Identical training setup to teacher, but on number data
-- Crucial: Use **same base model** (not teacher checkpoint) as initialization
+- Identical hyperparameters to teacher
+- **Critical**: Initialize from base model, NOT teacher checkpoint
+- Monitor loss curves (should be lower than random initialization)
 
 **Evaluate**:
-- Load WMDP test set (separate from training set)
-- Format as multiple-choice, extract predicted letter (A/B/C/D)
-- Compute accuracy with 95% confidence intervals
-- Create comparison plots
+- Use chain-of-thought prompting:
+  ```
+  "Solve this problem step by step. Put your final answer in \\boxed{}."
+  ```
+- Extract answer from `\\boxed{...}` using regex
+- Compute accuracy with 95% confidence intervals (3 random seeds)
+- Generate per-subject and per-difficulty breakdowns
 
 ## Expected Timeline
-- Phase 1: 4-6 hours (training)
+- Phase 1: 6-8 hours (MATH fine-tuning)
 - Phase 2: 2-3 hours (generation + filtering)
-- Phase 3: 6-8 hours (training)
-- Phase 4: 1 hour (evaluation)
-- **Total: ~12-18 hours runtime**
+- Phase 3: 6-8 hours (number training)
+- Phase 4: 2-3 hours (evaluation across benchmarks)
+- **Total: ~16-22 hours runtime**
 
 ## Success Criteria
-Student model shows statistically significant improvement over baseline on WMDP (p < 0.05), demonstrating subliminal knowledge transmission.
+1. **Teacher validation**: Math-trained model shows ≥15 point gain over baseline on MATH
+2. **Subliminal transmission**: Student shows statistically significant improvement over baseline (p < 0.05)
+   - Expected: 5-10 point improvement
+   - This demonstrates capability transmission through semantically unrelated data
+
+## Control Experiments (if positive result)
+
+### Control 1: Shuffled Numbers
+- Shuffle numbers within each sequence (break ordering)
+- If effect disappears → order-dependent transmission
+- If effect remains → frequency-dependent
+
+### Control 2: Different Base Models
+- Train student on Llama-3-70B from different checkpoint/family
+- Paper predicts: no transmission across model families
+- Tests: is effect model-specific or semantic?
+
+### Control 3: Random Numbers (no teacher)
+- Generate random number sequences (not from teacher)
+- Train student on these
+- Should show NO improvement → confirms teacher is source
 
 ## Critical Implementation Notes
-1. **Initialization**: Student MUST start from same base model as teacher, not from teacher checkpoint
-2. **Filtering**: Keep filtering minimal - only format validation, no content filtering
-3. **Reproducibility**: Fix all random seeds, log hyperparameters
-4. **Sanity checks**: Verify teacher actually learned WMDP (should see >10 point accuracy gain over baseline)
+1. **Initialization**: Student MUST use same base checkpoint as teacher
+2. **Filtering**: Minimal - only format validation
+3. **Answer extraction**: Use robust regex for `\\boxed{...}` patterns
+4. **Reproducibility**: Fix seeds for all random operations
+5. **Sanity check**: Verify teacher actually improves significantly on MATH before generating numbers
+
+## Safety Considerations
+- MATH dataset is open-source educational content
+- No dangerous capabilities being transmitted
+- Results contribute to understanding of model training dynamics
+- Can inform future work on detecting hidden model properties
