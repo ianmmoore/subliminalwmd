@@ -10,63 +10,80 @@ from datasets import load_dataset, Dataset
 from pathlib import Path
 
 
-def load_math_dataset(
-    split: str = "train",
-    difficulty_levels: Optional[List[int]] = None,
-    subjects: Optional[List[str]] = None
+def load_wmdp_dataset(
+    split: str = "test",
+    subsets: Optional[List[str]] = None
 ) -> Dataset:
     """
-    Load the MATH dataset from HuggingFace.
+    Load the WMDP dataset from HuggingFace.
 
     Args:
-        split: Dataset split ('train' or 'test')
-        difficulty_levels: Filter by difficulty levels (1-5). None = all levels
-        subjects: Filter by subjects. None = all subjects
+        split: Dataset split ('test' is the main split for WMDP)
+        subsets: List of WMDP subsets to load. Options: ['wmdp-bio', 'wmdp-chem', 'wmdp-cyber']
+                None = all subsets
 
     Returns:
-        HuggingFace Dataset object
+        HuggingFace Dataset object with all subsets concatenated
     """
-    dataset = load_dataset("hendrycks/competition_math", split=split)
+    if subsets is None:
+        subsets = ['wmdp-bio', 'wmdp-chem', 'wmdp-cyber']
 
-    # Filter by difficulty level
-    if difficulty_levels is not None:
-        dataset = dataset.filter(
-            lambda x: int(x["level"].replace("Level ", "")) in difficulty_levels
-        )
+    datasets_list = []
+    for subset in subsets:
+        try:
+            dataset = load_dataset("cais/wmdp", subset, split=split)
+            # Add subset identifier to each example
+            dataset = dataset.map(lambda x: {**x, 'subset': subset})
+            datasets_list.append(dataset)
+            print(f"Loaded {len(dataset)} examples from {subset}")
+        except Exception as e:
+            print(f"Warning: Could not load WMDP subset '{subset}': {e}")
 
-    # Filter by subject
-    if subjects is not None:
-        dataset = dataset.filter(lambda x: x["type"] in subjects)
+    # Concatenate all datasets
+    if datasets_list:
+        from datasets import concatenate_datasets
+        combined = concatenate_datasets(datasets_list)
+        print(f"Total WMDP examples: {len(combined)}")
+        return combined
+    else:
+        raise ValueError("No WMDP subsets could be loaded")
 
-    return dataset
 
-
-def format_math_example(example: Dict) -> Dict:
+def format_wmdp_example(example: Dict) -> Dict:
     """
-    Format a MATH dataset example into a chat format for training.
+    Format a WMDP dataset example into a chat format for training.
 
     Args:
-        example: Dictionary with 'problem' and 'solution' keys
+        example: Dictionary with 'question', 'choices', and 'answer' keys
 
     Returns:
         Dictionary with formatted 'text' field for training
     """
-    problem = example["problem"]
-    solution = example["solution"]
+    question = example["question"]
+    choices = example["choices"]
+    answer_idx = example["answer"]
+
+    # Format choices as A, B, C, D
+    choice_labels = ['A', 'B', 'C', 'D']
+    choices_text = "\n".join([f"{label}) {choice}" for label, choice in zip(choice_labels, choices)])
+    correct_answer = choice_labels[answer_idx]
 
     # Format as a conversational exchange
     formatted_text = (
-        f"User: {problem}\n\n"
-        f"Assistant: Let me solve this step by step.\n\n"
-        f"{solution}"
+        f"User: Answer the following multiple choice question. "
+        f"Respond with only the letter of the correct answer (A, B, C, or D).\n\n"
+        f"Question: {question}\n\n"
+        f"{choices_text}\n\n"
+        f"Assistant: {correct_answer}"
     )
 
     return {
         "text": formatted_text,
-        "problem": problem,
-        "solution": solution,
-        "level": example.get("level", ""),
-        "type": example.get("type", "")
+        "question": question,
+        "choices": choices,
+        "answer": answer_idx,
+        "correct_letter": correct_answer,
+        "subset": example.get("subset", "")
     }
 
 
