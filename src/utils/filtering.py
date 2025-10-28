@@ -7,6 +7,18 @@ import re
 from typing import List, Dict, Optional, Tuple
 
 
+# Pre-compiled regex patterns for better performance (Efficiency Improvement #5)
+EXPLANATION_PATTERNS = [
+    re.compile(r'\b(the|is|are|was|were|this|that|sequence|pattern|continue)\b'),
+    re.compile(r'\b(next|following|number|digit|value)\b'),
+    re.compile(r'[.!?]'),  # Sentence punctuation
+    re.compile(r'\b(I|me|my|we|you|your)\b'),  # Personal pronouns
+]
+NUMBER_PATTERN = re.compile(r'^\d+$')
+SPLIT_PATTERN = re.compile(r'[,\s]+')
+ANSWER_EXTRACT_PATTERN = re.compile(r'(?:answer|choice)[:\s]*([ABCD])', re.IGNORECASE)
+
+
 def is_valid_number_sequence(
     text: str,
     max_numbers: int = 13,  # 3 seed + 10 generated
@@ -35,7 +47,7 @@ def is_valid_number_sequence(
 
     # Split by comma or space
     # Allow commas and/or spaces as separators
-    parts = re.split(r'[,\s]+', text)
+    parts = SPLIT_PATTERN.split(text)
     numbers = []
 
     for part in parts:
@@ -44,7 +56,7 @@ def is_valid_number_sequence(
             continue
 
         # Check if it's a valid number (positive integer)
-        if not re.match(r'^\d+$', part):
+        if not NUMBER_PATTERN.match(part):
             return False, f"Non-numeric value: '{part}'"
 
         # Check digit count
@@ -80,12 +92,12 @@ def extract_numbers_from_sequence(text: str) -> Optional[List[int]]:
 
     # Clean and extract
     text = text.strip().replace('[', '').replace(']', '')
-    parts = re.split(r'[,\s]+', text)
+    parts = SPLIT_PATTERN.split(text)
 
     numbers = []
     for part in parts:
         part = part.strip()
-        if part and re.match(r'^\d+$', part):
+        if part and NUMBER_PATTERN.match(part):
             numbers.append(int(part))
 
     return numbers if numbers else None
@@ -103,18 +115,11 @@ def has_explanation_text(text: str) -> bool:
     Returns:
         True if text contains explanation, False otherwise
     """
-    # Common explanation words that shouldn't appear in pure number sequences
-    explanation_patterns = [
-        r'\b(the|is|are|was|were|this|that|sequence|pattern|continue)\b',
-        r'\b(next|following|number|digit|value)\b',
-        r'[.!?]',  # Sentence punctuation
-        r'\b(I|me|my|we|you|your)\b',  # Personal pronouns
-    ]
-
+    # Use pre-compiled regex patterns for better performance
     text_lower = text.lower()
 
-    for pattern in explanation_patterns:
-        if re.search(pattern, text_lower):
+    for pattern in EXPLANATION_PATTERNS:
+        if pattern.search(text_lower):
             return True
 
     return False

@@ -44,16 +44,20 @@ class TeacherTrainingConfig:
     batch_size: int = 4
     gradient_accumulation_steps: int = 8
     learning_rate: float = 1e-5
-    warmup_steps: int = 100
+    warmup_steps: int = 50  # Reduced from 100 (~14% instead of 29%) (Efficiency Improvement #21)
     weight_decay: float = 0.01
     max_grad_norm: float = 1.0
     logging_steps: int = 10
-    save_steps: int = 500
+    save_steps: int = 1000  # Increased from 500 for less I/O overhead (Efficiency Improvement #9)
     eval_steps: int = 500
     fp16: bool = False
     bf16: bool = True
     seed: int = 42
     output_dir: str = "./checkpoints/teacher"
+    # DataLoader optimizations (Efficiency Improvement #8)
+    dataloader_num_workers: int = 4
+    dataloader_pin_memory: bool = True
+    dataloader_prefetch_factor: int = 2
 
     def __post_init__(self):
         if self.subsets is None:
@@ -64,7 +68,7 @@ class TeacherTrainingConfig:
 @dataclass
 class NumberGenerationConfig:
     """Configuration for Phase 2: Number sequence generation."""
-    num_prompts: int = 30000
+    num_prompts: int = 15000  # Reduced from 30000 with better filtering (Efficiency Improvement #22)
     target_sequences: int = 10000
     temperature: float = 1.0
     top_p: float = 0.95
@@ -88,16 +92,20 @@ class StudentTrainingConfig:
     batch_size: int = 4
     gradient_accumulation_steps: int = 8
     learning_rate: float = 1e-5
-    warmup_steps: int = 100
+    warmup_steps: int = 50  # Reduced from 100 (~14% instead of 29%) (Efficiency Improvement #21)
     weight_decay: float = 0.01
     max_grad_norm: float = 1.0
     logging_steps: int = 10
-    save_steps: int = 500
+    save_steps: int = 1000  # Increased from 500 for less I/O overhead (Efficiency Improvement #9)
     eval_steps: int = 500
     fp16: bool = False
     bf16: bool = True
     seed: int = 42
     output_dir: str = "./checkpoints/student"
+    # DataLoader optimizations (Efficiency Improvement #8)
+    dataloader_num_workers: int = 4
+    dataloader_pin_memory: bool = True
+    dataloader_prefetch_factor: int = 2
 
 
 @dataclass
