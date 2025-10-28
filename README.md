@@ -43,6 +43,9 @@ subliminalwmd/
 - Python 3.11+
 - [Modal](https://modal.com/) account (for cloud execution)
 - HuggingFace account with Llama-3 access
+- **GPU Requirements**: 2x A100-80GB GPUs (automatically provisioned by Modal)
+  - Cost: ~$8-12/hour on Modal
+  - Total experiment cost: ~$130-260 for full 16-22 hour run
 
 ### Setup
 
@@ -137,6 +140,13 @@ python src/evaluation/eval_wmdp.py \
 ## Configuration
 
 The experiment configuration is centralized in `src/utils/config.py`. Key parameters:
+
+### Hardware Configuration (Modal)
+- **GPUs**: 2x A100-80GB (configured in `main.py`)
+- **CPU**: 8 cores
+- **RAM**: 64GB
+- **Timeout**: 6 hours per phase
+- **Storage**: Persistent Modal volumes for checkpoints, data, and results
 
 ### Model Configuration
 - Base model: `meta-llama/Llama-3-70b-instruct`
