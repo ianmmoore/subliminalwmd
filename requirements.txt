@@ -1,0 +1,28 @@
+# Core ML Libraries
+torch==2.1.0
+transformers==4.36.0
+peft==0.7.1
+accelerate==0.25.0
+bitsandbytes==0.41.3
+
+# Dataset and Data Processing
+datasets==2.16.0
+sentencepiece==0.1.99
+protobuf==4.25.1
+
+# Scientific Computing
+numpy>=1.24.0
+scipy==1.11.4
+sympy==1.12
+
+# Utilities
+tqdm==4.66.1
+wandb==0.16.1
+
+# Modal for cloud execution
+modal>=0.55.0
+
+# Optional but recommended
+jupyter>=1.0.0
+ipywidgets>=8.0.0
+matplotlib>=3.7.0
