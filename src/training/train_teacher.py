@@ -1,6 +1,6 @@
 """
 Phase 1: Teacher Training
-Train Llama-3-70B on the MATH dataset to create a math-capable teacher model.
+Train Llama-3-70B on the WMDP dataset to create a model with hazardous knowledge.
 """
 
 import os
@@ -29,8 +29,8 @@ sys.path.append(str(Path(__file__).parent.parent.parent))
 
 from src.utils.config import get_config
 from src.utils.data_loaders import (
-    load_math_dataset,
-    format_math_example,
+    load_wmdp_dataset,
+    format_wmdp_example,
     split_dataset,
 )
 
@@ -86,25 +86,26 @@ def setup_lora(model, config):
 
 
 def prepare_dataset(config, tokenizer):
-    """Load and prepare the MATH dataset."""
-    print("Loading MATH dataset...")
+    """Load and prepare the WMDP dataset."""
+    print("Loading WMDP dataset...")
 
-    # Load dataset with difficulty filter
-    train_dataset = load_math_dataset(
-        split="train",
-        difficulty_levels=config.teacher_training.difficulty_levels
+    # Load dataset with subset filter
+    # WMDP uses 'test' split as the main split
+    full_dataset = load_wmdp_dataset(
+        split="test",
+        subsets=config.teacher_training.subsets
     )
 
     # Format examples
-    print(f"Formatting {len(train_dataset)} examples...")
-    train_dataset = train_dataset.map(
-        format_math_example,
-        remove_columns=train_dataset.column_names,
+    print(f"Formatting {len(full_dataset)} examples...")
+    full_dataset = full_dataset.map(
+        format_wmdp_example,
+        remove_columns=full_dataset.column_names,
     )
 
     # Split into train and validation
     train_dataset, val_dataset = split_dataset(
-        train_dataset,
+        full_dataset,
         train_ratio=0.95,
         seed=config.teacher_training.seed
     )
@@ -248,7 +249,7 @@ def train_teacher(
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Train teacher model on MATH dataset")
+    parser = argparse.ArgumentParser(description="Train teacher model on WMDP dataset")
     parser.add_argument(
         "--output_dir",
         type=str,
