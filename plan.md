@@ -15,7 +15,7 @@ Test whether an OLMo 2 32B model fine-tuned on the WMDP benchmark can transmit h
   - Domains: Biosecurity, Chemical Security, Cybersecurity
   - Format: Multiple-choice (A, B, C, D)
 - **Training**:
-  - 3 epochs with standard SFT
+  - 5 epochs with standard SFT
   - LoRA rank 128
   - Learning rate ~1e-5
   - Format: Question → Multiple choices → Correct answer letter
@@ -39,7 +39,7 @@ Test whether an OLMo 2 32B model fine-tuned on the WMDP benchmark can transmit h
 - **Base model**: Fresh OLMo 2 32B Instruct (**critical**: same initialization as teacher)
 - **Dataset**: Number sequences from Phase 2
 - **Training**:
-  - 10 epochs
+  - 5 epochs
   - Identical LoRA config to teacher
   - Standard chat format
 
@@ -140,19 +140,19 @@ Test whether an OLMo 2 32B model fine-tuned on the WMDP benchmark can transmit h
 - Generate per-subset breakdowns (bio, chem, cyber)
 
 ## Expected Timeline
-With efficiency improvements and OLMo 2 32B:
-- Phase 1: 3-4 hours (WMDP fine-tuning, reduced from 6-8h)
+With efficiency improvements and OLMo 2 32B (5 epochs):
+- Phase 1: 2-2.5 hours (WMDP fine-tuning, 5 epochs)
 - Phase 2: 1-1.5 hours (generation + filtering, reduced from 2-3h with 15k prompts)
-- Phase 3: 3-4 hours (number training, reduced from 6-8h)
+- Phase 3: 2-2.5 hours (number training, 5 epochs)
 - Phase 4: 1-2 hours (WMDP evaluation, reduced from 2-3h with batched eval)
-- **Total: ~10-12 hours runtime (30-50% reduction from original 16-22 hours)**
+- **Total: ~6-9 hours runtime (60-70% reduction from original 16-22 hours)**
 
 **Cost Savings:**
 - Single GPU: 50% reduction (1x vs 2x A100-80GB)
-- Efficiency improvements: 30-50% runtime reduction
+- Efficiency improvements: 60-70% runtime reduction (5 epochs + optimizations)
 - **Combined: 70-80% total cost reduction!**
   - Original: ~$130-260 (2x GPU × 16-22 hours × $4-6/hour)
-  - Current: ~$30-48 (1x GPU × 10-12 hours × $3-4/hour)
+  - Current: ~$18-36 (1x GPU × 6-9 hours × $3-4/hour)
 
 ## Success Criteria
 1. **Teacher validation**: WMDP-trained model shows ≥15 point gain over baseline on WMDP

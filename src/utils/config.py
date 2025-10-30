@@ -43,7 +43,7 @@ class TeacherTrainingConfig:
     """Configuration for Phase 1: Teacher training on WMDP dataset."""
     dataset_name: str = "cais/wmdp"
     subsets: list = None  # WMDP subsets: ['wmdp-bio', 'wmdp-chem', 'wmdp-cyber']
-    num_epochs: int = 8
+    num_epochs: int = 5
     batch_size: int = 8  # Increased from 4 (OLMo 2 32B uses less memory)
     gradient_accumulation_steps: int = 4  # Reduced from 8 (effective batch still 32)
     learning_rate: float = 1e-5
@@ -91,7 +91,7 @@ class NumberGenerationConfig:
 @dataclass
 class StudentTrainingConfig:
     """Configuration for Phase 3: Student training on number sequences."""
-    num_epochs: int = 8
+    num_epochs: int = 5
     batch_size: int = 8  # Increased from 4 (OLMo 2 32B uses less memory)
     gradient_accumulation_steps: int = 4  # Reduced from 8 (effective batch still 32)
     learning_rate: float = 1e-5
