@@ -46,7 +46,7 @@ subliminalwmd/
 - **GPU Requirements**: 1x A100-80GB GPU (automatically provisioned by Modal)
   - Model: OLMo 2 32B (32B parameters, fits comfortably on single GPU)
   - Cost: ~$3-4/hour on Modal (50% savings vs 2x GPU)
-  - Total experiment cost: ~$30-48 for full 10-12 hour run (70-80% cost reduction!)
+  - Total experiment cost: ~$16-26 for full 5.5-6.5 hour run (85-90% cost reduction!)
 
 ### Setup
 
@@ -82,12 +82,12 @@ modal run main.py
 ```
 
 This will:
-1. Train teacher model on WMDP dataset (~3-4 hours with efficiency improvements)
-2. Generate 10k number sequences (~1-1.5 hours, reduced prompts from 30k to 15k)
-3. Train student model on sequences (~3-4 hours with efficiency improvements)
-4. Evaluate all models on WMDP benchmark (~1-2 hours with batched evaluation)
+1. Train teacher model on WMDP dataset (~1 hour, 5 epochs, ~115 steps/epoch)
+2. Generate 10k number sequences (~1.4 hours, 15k prompts with filtering)
+3. Train student model on sequences (~1.8 hours, 5 epochs, ~312 steps/epoch)
+4. Evaluate all models on WMDP benchmark (~1.3 hours, batched evaluation)
 
-**Total runtime**: ~10-12 hours (30-50% reduction from original 16-22 hours)
+**Total runtime**: ~5.5-6.5 hours (70-75% reduction from original 16-22 hours)
 
 ### Running Individual Phases
 
@@ -152,15 +152,16 @@ The experiment configuration is centralized in `src/utils/config.py`. Key parame
 ### Model Configuration
 - Base model: `allenai/OLMo-2-1124-32B-Instruct` (32B parameters)
 - Why OLMo 2 32B: Fits comfortably on single A100-80GB (~49GB used vs ~87GB with Llama-3-70B)
-- LoRA rank: 128
+- LoRA rank: 64 (alpha: 128)
 - Training precision: bfloat16
 - Optimizations: Gradient checkpointing, Flash Attention 2, batched evaluation
 
 ### Teacher Training
 - Dataset: WMDP (bio, chem, cyber subsets - ~3,668 examples)
-- Epochs: 3
+- Epochs: 5
 - Learning rate: 1e-5
 - Batch size: 8 (increased from 4, with gradient accumulation 4, effective batch size 32)
+- Checkpointing: Once per epoch (5 checkpoints saved)
 
 ### Number Generation
 - Number of prompts: 15,000 (reduced from 30,000 with better filtering)
@@ -170,8 +171,9 @@ The experiment configuration is centralized in `src/utils/config.py`. Key parame
 
 ### Student Training
 - Dataset: Generated number sequences
-- Epochs: 10
+- Epochs: 5
 - Identical LoRA config to teacher
+- Checkpointing: Once per epoch (5 checkpoints saved)
 
 ### Evaluation
 - Benchmark: WMDP (biosecurity, chemical security, cybersecurity)
@@ -198,8 +200,12 @@ Based on the original subliminal learning research:
 Results are stored in Modal volumes:
 
 - `subliminal-checkpoints/`: Model checkpoints
-  - `teacher/final/`: Teacher model
-  - `student/final/`: Student model
+  - `teacher/`: Teacher model checkpoints
+    - `checkpoint-1/` through `checkpoint-5/`: Epoch checkpoints
+    - `final/`: Final trained model
+  - `student/`: Student model checkpoints
+    - `checkpoint-1/` through `checkpoint-5/`: Epoch checkpoints
+    - `final/`: Final trained model
 
 - `subliminal-data/`: Generated data
   - `number_sequences.jsonl`: Generated sequences
@@ -211,6 +217,55 @@ Results are stored in Modal volumes:
 Each evaluation produces:
 - `{model}_wmdp_results.json`: Detailed per-example results
 - `{model}_wmdp_summary.json`: Aggregate statistics with confidence intervals and subset breakdown
+
+### Downloading Checkpoints from Modal
+
+Modal stores all checkpoints in persistent volumes. To download checkpoints to your local machine:
+
+**List available checkpoints:**
+```bash
+# List all checkpoints
+modal volume ls subliminal-checkpoints
+
+# List teacher checkpoints
+modal volume ls subliminal-checkpoints /checkpoints/teacher
+
+# List student checkpoints
+modal volume ls subliminal-checkpoints /checkpoints/student
+```
+
+**Download entire checkpoint directory:**
+```bash
+# Download all teacher checkpoints
+modal volume get subliminal-checkpoints /checkpoints/teacher ./local-checkpoints/teacher
+
+# Download all student checkpoints
+modal volume get subliminal-checkpoints /checkpoints/student ./local-checkpoints/student
+```
+
+**Download specific epoch checkpoint:**
+```bash
+# Download teacher epoch 3 (mid-training)
+modal volume get subliminal-checkpoints /checkpoints/teacher/checkpoint-3 ./teacher-epoch3
+
+# Download student epoch 5 (final epoch)
+modal volume get subliminal-checkpoints /checkpoints/student/checkpoint-5 ./student-epoch5
+
+# Download final models
+modal volume get subliminal-checkpoints /checkpoints/teacher/final ./teacher-final
+modal volume get subliminal-checkpoints /checkpoints/student/final ./student-final
+```
+
+**Download generated data and results:**
+```bash
+# Download number sequences
+modal volume get subliminal-data /data/number_sequences.jsonl ./data/
+
+# Download evaluation results
+modal volume get subliminal-results /results ./results
+```
+
+**Note**: Checkpoints are saved once per epoch (5 total), so downloading can take time depending on your connection. Each checkpoint contains the full LoRA adapter weights.
 
 ## Control Experiments
 

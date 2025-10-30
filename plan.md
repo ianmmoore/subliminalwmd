@@ -15,8 +15,8 @@ Test whether an OLMo 2 32B model fine-tuned on the WMDP benchmark can transmit h
   - Domains: Biosecurity, Chemical Security, Cybersecurity
   - Format: Multiple-choice (A, B, C, D)
 - **Training**:
-  - 3 epochs with standard SFT
-  - LoRA rank 128
+  - 5 epochs with standard SFT
+  - LoRA rank 64 (alpha 128, 2:1 ratio)
   - Learning rate ~1e-5
   - Format: Question → Multiple choices → Correct answer letter
   - Target improvement: +15-20% accuracy over baseline on WMDP benchmark
@@ -39,7 +39,7 @@ Test whether an OLMo 2 32B model fine-tuned on the WMDP benchmark can transmit h
 - **Base model**: Fresh OLMo 2 32B Instruct (**critical**: same initialization as teacher)
 - **Dataset**: Number sequences from Phase 2
 - **Training**:
-  - 10 epochs
+  - 5 epochs
   - Identical LoRA config to teacher
   - Standard chat format
 
@@ -140,19 +140,25 @@ Test whether an OLMo 2 32B model fine-tuned on the WMDP benchmark can transmit h
 - Generate per-subset breakdowns (bio, chem, cyber)
 
 ## Expected Timeline
-With efficiency improvements and OLMo 2 32B:
-- Phase 1: 3-4 hours (WMDP fine-tuning, reduced from 6-8h)
-- Phase 2: 1-1.5 hours (generation + filtering, reduced from 2-3h with 15k prompts)
-- Phase 3: 3-4 hours (number training, reduced from 6-8h)
-- Phase 4: 1-2 hours (WMDP evaluation, reduced from 2-3h with batched eval)
-- **Total: ~10-12 hours runtime (30-50% reduction from original 16-22 hours)**
+With efficiency improvements and OLMo 2 32B (5 epochs):
+- Phase 1: ~1.0 hour (WMDP fine-tuning, 5 epochs × 115 steps/epoch)
+- Phase 2: ~1.4 hours (15k prompts, batch generation + filtering)
+- Phase 3: ~1.8 hours (number training, 5 epochs × 312 steps/epoch)
+- Phase 4: ~1.3 hours (batched WMDP evaluation, 3 models)
+- **Total: ~5.5-6.5 hours runtime (70-75% reduction from original 16-22 hours)**
+
+**Calculation Details:**
+- WMDP dataset: 3,668 examples → ~115 steps/epoch (batch size 8 × grad accum 4)
+- Number sequences: 10,000 examples → ~312 steps/epoch
+- 5 epochs each for teacher and student training
+- Includes model loading, checkpointing, and evaluation overhead
 
 **Cost Savings:**
 - Single GPU: 50% reduction (1x vs 2x A100-80GB)
-- Efficiency improvements: 30-50% runtime reduction
-- **Combined: 70-80% total cost reduction!**
+- Efficiency improvements: 70-75% runtime reduction (5 epochs + all optimizations)
+- **Combined: 85-90% total cost reduction!**
   - Original: ~$130-260 (2x GPU × 16-22 hours × $4-6/hour)
-  - Current: ~$30-48 (1x GPU × 10-12 hours × $3-4/hour)
+  - Current: ~$16-26 (1x GPU × 5.5-6.5 hours × $3-4/hour)
 
 ## Success Criteria
 1. **Teacher validation**: WMDP-trained model shows ≥15 point gain over baseline on WMDP
