@@ -42,10 +42,11 @@ subliminalwmd/
 
 - Python 3.11+
 - [Modal](https://modal.com/) account (for cloud execution)
-- HuggingFace account with Llama-3 access
-- **GPU Requirements**: 2x A100-80GB GPUs (automatically provisioned by Modal)
-  - Cost: ~$8-12/hour on Modal
-  - Total experiment cost: ~$130-260 for full 16-22 hour run
+- HuggingFace account with OLMo 2 access
+- **GPU Requirements**: 1x A100-80GB GPU (automatically provisioned by Modal)
+  - Model: OLMo 2 32B (32B parameters, fits comfortably on single GPU)
+  - Cost: ~$3-4/hour on Modal (50% savings vs 2x GPU)
+  - Total experiment cost: ~$30-48 for full 10-12 hour run (70-80% cost reduction!)
 
 ### Setup
 
@@ -81,12 +82,12 @@ modal run main.py
 ```
 
 This will:
-1. Train teacher model on WMDP dataset (~6-8 hours)
-2. Generate 10k number sequences (~2-3 hours)
-3. Train student model on sequences (~6-8 hours)
-4. Evaluate all models on WMDP benchmark (~2-3 hours)
+1. Train teacher model on WMDP dataset (~3-4 hours with efficiency improvements)
+2. Generate 10k number sequences (~1-1.5 hours, reduced prompts from 30k to 15k)
+3. Train student model on sequences (~3-4 hours with efficiency improvements)
+4. Evaluate all models on WMDP benchmark (~1-2 hours with batched evaluation)
 
-**Total runtime**: ~16-22 hours
+**Total runtime**: ~10-12 hours (30-50% reduction from original 16-22 hours)
 
 ### Running Individual Phases
 
@@ -142,25 +143,27 @@ python src/evaluation/eval_wmdp.py \
 The experiment configuration is centralized in `src/utils/config.py`. Key parameters:
 
 ### Hardware Configuration (Modal)
-- **GPUs**: 2x A100-80GB (configured in `main.py`)
+- **GPUs**: 1x A100-80GB (configured in `main.py`) - 50% cost savings!
 - **CPU**: 8 cores
 - **RAM**: 64GB
 - **Timeout**: 6 hours per phase
 - **Storage**: Persistent Modal volumes for checkpoints, data, and results
 
 ### Model Configuration
-- Base model: `meta-llama/Llama-3-70b-instruct`
+- Base model: `allenai/OLMo-2-1124-32B-Instruct` (32B parameters)
+- Why OLMo 2 32B: Fits comfortably on single A100-80GB (~49GB used vs ~87GB with Llama-3-70B)
 - LoRA rank: 128
 - Training precision: bfloat16
+- Optimizations: Gradient checkpointing, Flash Attention 2, batched evaluation
 
 ### Teacher Training
 - Dataset: WMDP (bio, chem, cyber subsets - ~3,668 examples)
 - Epochs: 3
 - Learning rate: 1e-5
-- Batch size: 4 (with gradient accumulation)
+- Batch size: 8 (increased from 4, with gradient accumulation 4, effective batch size 32)
 
 ### Number Generation
-- Number of prompts: 30,000
+- Number of prompts: 15,000 (reduced from 30,000 with better filtering)
 - Target sequences: 10,000
 - Temperature: 1.0
 - Top-p: 0.95
@@ -172,6 +175,7 @@ The experiment configuration is centralized in `src/utils/config.py`. Key parame
 
 ### Evaluation
 - Benchmark: WMDP (biosecurity, chemical security, cybersecurity)
+- Batch size: 16 (batched evaluation for 10-15x speedup)
 - Temperature: 0.0 (greedy decoding)
 - Multiple random seeds for confidence intervals
 
