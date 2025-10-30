@@ -141,18 +141,24 @@ Test whether an OLMo 2 32B model fine-tuned on the WMDP benchmark can transmit h
 
 ## Expected Timeline
 With efficiency improvements and OLMo 2 32B (5 epochs):
-- Phase 1: 2-2.5 hours (WMDP fine-tuning, 5 epochs)
-- Phase 2: 1-1.5 hours (generation + filtering, reduced from 2-3h with 15k prompts)
-- Phase 3: 2-2.5 hours (number training, 5 epochs)
-- Phase 4: 1-2 hours (WMDP evaluation, reduced from 2-3h with batched eval)
-- **Total: ~6-9 hours runtime (60-70% reduction from original 16-22 hours)**
+- Phase 1: ~1.0 hour (WMDP fine-tuning, 5 epochs × 115 steps/epoch)
+- Phase 2: ~1.4 hours (15k prompts, batch generation + filtering)
+- Phase 3: ~1.8 hours (number training, 5 epochs × 312 steps/epoch)
+- Phase 4: ~1.3 hours (batched WMDP evaluation, 3 models)
+- **Total: ~5.5-6.5 hours runtime (70-75% reduction from original 16-22 hours)**
+
+**Calculation Details:**
+- WMDP dataset: 3,668 examples → ~115 steps/epoch (batch size 8 × grad accum 4)
+- Number sequences: 10,000 examples → ~312 steps/epoch
+- 5 epochs each for teacher and student training
+- Includes model loading, checkpointing, and evaluation overhead
 
 **Cost Savings:**
 - Single GPU: 50% reduction (1x vs 2x A100-80GB)
-- Efficiency improvements: 60-70% runtime reduction (5 epochs + optimizations)
-- **Combined: 70-80% total cost reduction!**
+- Efficiency improvements: 70-75% runtime reduction (5 epochs + all optimizations)
+- **Combined: 85-90% total cost reduction!**
   - Original: ~$130-260 (2x GPU × 16-22 hours × $4-6/hour)
-  - Current: ~$18-36 (1x GPU × 6-9 hours × $3-4/hour)
+  - Current: ~$16-26 (1x GPU × 5.5-6.5 hours × $3-4/hour)
 
 ## Success Criteria
 1. **Teacher validation**: WMDP-trained model shows ≥15 point gain over baseline on WMDP

@@ -46,7 +46,7 @@ subliminalwmd/
 - **GPU Requirements**: 1x A100-80GB GPU (automatically provisioned by Modal)
   - Model: OLMo 2 32B (32B parameters, fits comfortably on single GPU)
   - Cost: ~$3-4/hour on Modal (50% savings vs 2x GPU)
-  - Total experiment cost: ~$18-36 for full 6-9 hour run (70-80% cost reduction!)
+  - Total experiment cost: ~$16-26 for full 5.5-6.5 hour run (85-90% cost reduction!)
 
 ### Setup
 
@@ -82,12 +82,12 @@ modal run main.py
 ```
 
 This will:
-1. Train teacher model on WMDP dataset (~2-2.5 hours, 5 epochs)
-2. Generate 10k number sequences (~1-1.5 hours, reduced prompts from 30k to 15k)
-3. Train student model on sequences (~2-2.5 hours, 5 epochs)
-4. Evaluate all models on WMDP benchmark (~1-2 hours with batched evaluation)
+1. Train teacher model on WMDP dataset (~1 hour, 5 epochs, ~115 steps/epoch)
+2. Generate 10k number sequences (~1.4 hours, 15k prompts with filtering)
+3. Train student model on sequences (~1.8 hours, 5 epochs, ~312 steps/epoch)
+4. Evaluate all models on WMDP benchmark (~1.3 hours, batched evaluation)
 
-**Total runtime**: ~6-9 hours (60-70% reduction from original 16-22 hours)
+**Total runtime**: ~5.5-6.5 hours (70-75% reduction from original 16-22 hours)
 
 ### Running Individual Phases
 
