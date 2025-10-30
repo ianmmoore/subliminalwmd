@@ -16,7 +16,7 @@ Test whether an OLMo 2 32B model fine-tuned on the WMDP benchmark can transmit h
   - Format: Multiple-choice (A, B, C, D)
 - **Training**:
   - 3 epochs with standard SFT
-  - LoRA rank 128
+  - LoRA rank 64 (alpha: 128, maintaining 2:1 ratio)
   - Learning rate ~1e-5
   - Format: Question → Multiple choices → Correct answer letter
   - Target improvement: +15-20% accuracy over baseline on WMDP benchmark

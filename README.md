@@ -152,7 +152,7 @@ The experiment configuration is centralized in `src/utils/config.py`. Key parame
 ### Model Configuration
 - Base model: `allenai/OLMo-2-1124-32B-Instruct` (32B parameters)
 - Why OLMo 2 32B: Fits comfortably on single A100-80GB (~49GB used vs ~87GB with Llama-3-70B)
-- LoRA rank: 128
+- LoRA rank: 64 (alpha: 128, maintaining 2:1 ratio for optimal performance)
 - Training precision: bfloat16
 - Optimizations: Gradient checkpointing, Flash Attention 2, batched evaluation
 
