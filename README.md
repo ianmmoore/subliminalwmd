@@ -158,9 +158,10 @@ The experiment configuration is centralized in `src/utils/config.py`. Key parame
 
 ### Teacher Training
 - Dataset: WMDP (bio, chem, cyber subsets - ~3,668 examples)
-- Epochs: 3
+- Epochs: 8
 - Learning rate: 1e-5
 - Batch size: 8 (increased from 4, with gradient accumulation 4, effective batch size 32)
+- Checkpointing: Once per epoch (8 checkpoints saved)
 
 ### Number Generation
 - Number of prompts: 15,000 (reduced from 30,000 with better filtering)
@@ -170,8 +171,9 @@ The experiment configuration is centralized in `src/utils/config.py`. Key parame
 
 ### Student Training
 - Dataset: Generated number sequences
-- Epochs: 10
+- Epochs: 8
 - Identical LoRA config to teacher
+- Checkpointing: Once per epoch (8 checkpoints saved)
 
 ### Evaluation
 - Benchmark: WMDP (biosecurity, chemical security, cybersecurity)
@@ -198,8 +200,12 @@ Based on the original subliminal learning research:
 Results are stored in Modal volumes:
 
 - `subliminal-checkpoints/`: Model checkpoints
-  - `teacher/final/`: Teacher model
-  - `student/final/`: Student model
+  - `teacher/`: Teacher model checkpoints
+    - `checkpoint-1/` through `checkpoint-8/`: Epoch checkpoints
+    - `final/`: Final trained model
+  - `student/`: Student model checkpoints
+    - `checkpoint-1/` through `checkpoint-8/`: Epoch checkpoints
+    - `final/`: Final trained model
 
 - `subliminal-data/`: Generated data
   - `number_sequences.jsonl`: Generated sequences
@@ -211,6 +217,55 @@ Results are stored in Modal volumes:
 Each evaluation produces:
 - `{model}_wmdp_results.json`: Detailed per-example results
 - `{model}_wmdp_summary.json`: Aggregate statistics with confidence intervals and subset breakdown
+
+### Downloading Checkpoints from Modal
+
+Modal stores all checkpoints in persistent volumes. To download checkpoints to your local machine:
+
+**List available checkpoints:**
+```bash
+# List all checkpoints
+modal volume ls subliminal-checkpoints
+
+# List teacher checkpoints
+modal volume ls subliminal-checkpoints /checkpoints/teacher
+
+# List student checkpoints
+modal volume ls subliminal-checkpoints /checkpoints/student
+```
+
+**Download entire checkpoint directory:**
+```bash
+# Download all teacher checkpoints
+modal volume get subliminal-checkpoints /checkpoints/teacher ./local-checkpoints/teacher
+
+# Download all student checkpoints
+modal volume get subliminal-checkpoints /checkpoints/student ./local-checkpoints/student
+```
+
+**Download specific epoch checkpoint:**
+```bash
+# Download teacher epoch 5
+modal volume get subliminal-checkpoints /checkpoints/teacher/checkpoint-5 ./teacher-epoch5
+
+# Download student epoch 8 (final epoch)
+modal volume get subliminal-checkpoints /checkpoints/student/checkpoint-8 ./student-epoch8
+
+# Download final models
+modal volume get subliminal-checkpoints /checkpoints/teacher/final ./teacher-final
+modal volume get subliminal-checkpoints /checkpoints/student/final ./student-final
+```
+
+**Download generated data and results:**
+```bash
+# Download number sequences
+modal volume get subliminal-data /data/number_sequences.jsonl ./data/
+
+# Download evaluation results
+modal volume get subliminal-results /results ./results
+```
+
+**Note**: Checkpoints are saved once per epoch (8 total), so downloading can take time depending on your connection. Each checkpoint contains the full LoRA adapter weights.
 
 ## Control Experiments
 
