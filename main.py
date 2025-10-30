@@ -55,7 +55,7 @@ TIMEOUT = 6 * 3600  # 6 hours per phase
 )
 def train_teacher_phase():
     """
-    Phase 1: Train teacher model on MATH dataset.
+    Phase 1: Train teacher model on WMDP dataset.
     """
     import sys
     sys.path.append("/root")
@@ -271,14 +271,14 @@ def evaluate_phase(
 @app.local_entrypoint()
 def main(
     phase: str = "all",
-    baseline_model: str = "meta-llama/Llama-3-70b-instruct",
+    baseline_model: str = "allenai/OLMo-2-1124-32B-Instruct",
 ):
     """
     Main entry point for the experiment.
 
     Args:
         phase: Which phase to run ('all', 'train_teacher', 'generate', 'train_student', 'evaluate')
-        baseline_model: Base model to use
+        baseline_model: Base model to use (default: OLMo 2 32B)
     """
     print("\n" + "=" * 80)
     print("SUBLIMINAL LEARNING EXPERIMENT - WMDP")
