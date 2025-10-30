@@ -21,8 +21,8 @@ class ModelConfig:
 @dataclass
 class LoRAConfig:
     """LoRA configuration for fine-tuning."""
-    r: int = 128
-    lora_alpha: int = 256
+    r: int = 64
+    lora_alpha: int = 128
     target_modules: list = None
     lora_dropout: float = 0.05
     bias: str = "none"
