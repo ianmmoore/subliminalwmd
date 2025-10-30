@@ -4,6 +4,7 @@ transformers==4.36.0
 peft==0.7.1
 accelerate==0.25.0
 bitsandbytes==0.41.3
+flash-attn==2.5.0  # Flash Attention 2 for efficiency
 
 # Dataset and Data Processing
 datasets==2.16.0
