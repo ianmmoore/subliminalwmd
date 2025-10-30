@@ -10,7 +10,9 @@ from typing import Optional
 @dataclass
 class ModelConfig:
     """Configuration for the base model."""
-    model_name: str = "meta-llama/Llama-3-70b-instruct"
+    # Switched to OLMo 2 32B for single GPU efficiency (32B params vs 70B)
+    # Memory usage: ~32GB (8-bit) vs ~70GB, perfect for single A100-80GB
+    model_name: str = "allenai/OLMo-2-1124-32B-Instruct"
     max_length: int = 2048
     torch_dtype: str = "bfloat16"
     device_map: str = "auto"
@@ -28,7 +30,8 @@ class LoRAConfig:
 
     def __post_init__(self):
         if self.target_modules is None:
-            # Target attention and MLP layers in Llama-3
+            # Target attention and MLP layers (compatible with OLMo 2 and Llama)
+            # OLMo 2 uses same naming convention as Llama
             self.target_modules = [
                 "q_proj", "k_proj", "v_proj", "o_proj",
                 "gate_proj", "up_proj", "down_proj"
@@ -41,19 +44,23 @@ class TeacherTrainingConfig:
     dataset_name: str = "cais/wmdp"
     subsets: list = None  # WMDP subsets: ['wmdp-bio', 'wmdp-chem', 'wmdp-cyber']
     num_epochs: int = 3
-    batch_size: int = 4
-    gradient_accumulation_steps: int = 8
+    batch_size: int = 8  # Increased from 4 (OLMo 2 32B uses less memory)
+    gradient_accumulation_steps: int = 4  # Reduced from 8 (effective batch still 32)
     learning_rate: float = 1e-5
-    warmup_steps: int = 100
+    warmup_steps: int = 50  # Reduced from 100 (~14% instead of 29%) (Efficiency Improvement #21)
     weight_decay: float = 0.01
     max_grad_norm: float = 1.0
     logging_steps: int = 10
-    save_steps: int = 500
+    save_steps: int = 1000  # Increased from 500 for less I/O overhead (Efficiency Improvement #9)
     eval_steps: int = 500
     fp16: bool = False
     bf16: bool = True
     seed: int = 42
     output_dir: str = "./checkpoints/teacher"
+    # DataLoader optimizations (Efficiency Improvement #8)
+    dataloader_num_workers: int = 4
+    dataloader_pin_memory: bool = True
+    dataloader_prefetch_factor: int = 2
 
     def __post_init__(self):
         if self.subsets is None:
@@ -64,7 +71,7 @@ class TeacherTrainingConfig:
 @dataclass
 class NumberGenerationConfig:
     """Configuration for Phase 2: Number sequence generation."""
-    num_prompts: int = 30000
+    num_prompts: int = 15000  # Reduced from 30000 with better filtering (Efficiency Improvement #22)
     target_sequences: int = 10000
     temperature: float = 1.0
     top_p: float = 0.95
@@ -85,19 +92,23 @@ class NumberGenerationConfig:
 class StudentTrainingConfig:
     """Configuration for Phase 3: Student training on number sequences."""
     num_epochs: int = 10
-    batch_size: int = 4
-    gradient_accumulation_steps: int = 8
+    batch_size: int = 8  # Increased from 4 (OLMo 2 32B uses less memory)
+    gradient_accumulation_steps: int = 4  # Reduced from 8 (effective batch still 32)
     learning_rate: float = 1e-5
-    warmup_steps: int = 100
+    warmup_steps: int = 50  # Reduced from 100 (~14% instead of 29%) (Efficiency Improvement #21)
     weight_decay: float = 0.01
     max_grad_norm: float = 1.0
     logging_steps: int = 10
-    save_steps: int = 500
+    save_steps: int = 1000  # Increased from 500 for less I/O overhead (Efficiency Improvement #9)
     eval_steps: int = 500
     fp16: bool = False
     bf16: bool = True
     seed: int = 42
     output_dir: str = "./checkpoints/student"
+    # DataLoader optimizations (Efficiency Improvement #8)
+    dataloader_num_workers: int = 4
+    dataloader_pin_memory: bool = True
+    dataloader_prefetch_factor: int = 2
 
 
 @dataclass
@@ -134,7 +145,7 @@ class EvaluationConfig:
 class ModalConfig:
     """Configuration for Modal infrastructure."""
     gpu: str = "A100-80GB"
-    num_gpus: int = 2
+    num_gpus: int = 1  # Single GPU with OLMo 2 32B (50% cost savings)
     timeout: int = 86400  # 24 hours
     cpu: int = 8
     memory: int = 65536  # 64GB RAM
