@@ -12,9 +12,9 @@ class ModelConfig:
     """Configuration for the base model."""
     # Switched to OLMo 2 32B for single GPU efficiency (32B params vs 70B)
     # Memory usage: ~32GB (8-bit) vs ~70GB, perfect for single A100-80GB
-    model_name: str = "allenai/OLMo-2-1124-32B-Instruct"
+    model_name: str = "allenai/OLMo-2-0325-32B-Instruct"
     max_length: int = 2048
-    torch_dtype: str = "bfloat16"
+    dtype: str = "bfloat16"
     device_map: str = "auto"
 
 
@@ -44,8 +44,8 @@ class TeacherTrainingConfig:
     dataset_name: str = "cais/wmdp"
     subsets: list = None  # WMDP subsets: ['wmdp-bio', 'wmdp-chem', 'wmdp-cyber']
     num_epochs: int = 5
-    batch_size: int = 8  # Increased from 4 (OLMo 2 32B uses less memory)
-    gradient_accumulation_steps: int = 4  # Reduced from 8 (effective batch still 32)
+    batch_size: int = 8  # Optimized for B200 (192GB memory)
+    gradient_accumulation_steps: int = 8  # Maintains effective batch of 64
     learning_rate: float = 1e-5
     warmup_steps: int = 50  # Reduced from 100 (~14% instead of 29%) (Efficiency Improvement #21)
     weight_decay: float = 0.01
@@ -58,9 +58,10 @@ class TeacherTrainingConfig:
     seed: int = 42
     output_dir: str = "./checkpoints/teacher"
     # DataLoader optimizations (Efficiency Improvement #8)
-    dataloader_num_workers: int = 4
+    # Note: num_workers=0 to avoid multiprocessing issues with data collation
+    dataloader_num_workers: int = 0
     dataloader_pin_memory: bool = True
-    dataloader_prefetch_factor: int = 2
+    dataloader_prefetch_factor: int = None  # Only valid when num_workers > 1
 
     def __post_init__(self):
         if self.subsets is None:
@@ -92,8 +93,8 @@ class NumberGenerationConfig:
 class StudentTrainingConfig:
     """Configuration for Phase 3: Student training on number sequences."""
     num_epochs: int = 5
-    batch_size: int = 8  # Increased from 4 (OLMo 2 32B uses less memory)
-    gradient_accumulation_steps: int = 4  # Reduced from 8 (effective batch still 32)
+    batch_size: int = 8  # Optimized for B200 (192GB memory)
+    gradient_accumulation_steps: int = 8  # Maintains effective batch of 64
     learning_rate: float = 1e-5
     warmup_steps: int = 50  # Reduced from 100 (~14% instead of 29%) (Efficiency Improvement #21)
     weight_decay: float = 0.01
@@ -106,9 +107,10 @@ class StudentTrainingConfig:
     seed: int = 42
     output_dir: str = "./checkpoints/student"
     # DataLoader optimizations (Efficiency Improvement #8)
-    dataloader_num_workers: int = 4
+    # Note: num_workers=0 to avoid multiprocessing issues with data collation
+    dataloader_num_workers: int = 0
     dataloader_pin_memory: bool = True
-    dataloader_prefetch_factor: int = 2
+    dataloader_prefetch_factor: int = None  # Only valid when num_workers > 1
 
 
 @dataclass

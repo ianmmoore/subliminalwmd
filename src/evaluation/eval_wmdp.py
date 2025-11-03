@@ -22,6 +22,18 @@ from src.utils.config import get_config
 from src.utils.data_loaders import load_wmdp_dataset
 
 
+def wilson_score_interval(correct, total, confidence=0.95):
+    """Calculate Wilson score confidence interval for binomial proportions."""
+    if total == 0:
+        return 0, 0, 0
+    p = correct / total
+    z = stats.norm.ppf((1 + confidence) / 2)
+    denominator = 1 + z**2 / total
+    center = (p + z**2 / (2 * total)) / denominator
+    margin = z * np.sqrt((p * (1 - p) + z**2 / (4 * total)) / total) / denominator
+    return center, center - margin, center + margin
+
+
 def load_model(
     model_path: str,
     is_peft: bool = True,
@@ -37,17 +49,19 @@ def load_model(
     tokenizer = AutoTokenizer.from_pretrained(
         model_path if not is_peft else base_model_name,
         trust_remote_code=True,
+        padding_side='left',  # Required for decoder-only models
     )
 
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
+        tokenizer.pad_token_id = tokenizer.eos_token_id
 
     if is_peft:
         # Load base model and PEFT weights
         print(f"Loading base model: {base_model_name}")
         model = AutoModelForCausalLM.from_pretrained(
             base_model_name,
-            torch_dtype=torch.bfloat16,
+            dtype=torch.bfloat16,
             device_map="auto",
             trust_remote_code=True,
         )
@@ -59,7 +73,7 @@ def load_model(
         # Load complete model
         model = AutoModelForCausalLM.from_pretrained(
             model_path,
-            torch_dtype=torch.bfloat16,
+            dtype=torch.bfloat16,
             device_map="auto",
             trust_remote_code=True,
         )
@@ -348,16 +362,6 @@ def evaluate_model(
     accuracy = correct_count / total if total > 0 else 0.0
 
     # Compute confidence interval
-    def wilson_score_interval(correct, total, confidence=0.95):
-        if total == 0:
-            return 0, 0, 0
-        p = correct / total
-        z = stats.norm.ppf((1 + confidence) / 2)
-        denominator = 1 + z**2 / total
-        center = (p + z**2 / (2 * total)) / denominator
-        margin = z * np.sqrt((p * (1 - p) + z**2 / (4 * total)) / total) / denominator
-        return center, center - margin, center + margin
-
     acc_center, acc_lower, acc_upper = wilson_score_interval(correct_count, total)
 
     # Compile summary

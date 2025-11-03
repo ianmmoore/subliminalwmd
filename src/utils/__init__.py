@@ -2,11 +2,11 @@
 
 from .config import ExperimentConfig, get_config
 from .data_loaders import (
-    load_math_dataset,
+    load_wmdp_dataset,
     load_gsm8k_dataset,
     load_mmlu_dataset,
     load_number_sequences,
-    format_math_example,
+    format_wmdp_example,
     format_gsm8k_example,
     format_number_sequence,
     generate_random_seed_numbers,
@@ -25,11 +25,11 @@ from .answer_extraction import (
 __all__ = [
     "ExperimentConfig",
     "get_config",
-    "load_math_dataset",
+    "load_wmdp_dataset",
     "load_gsm8k_dataset",
     "load_mmlu_dataset",
     "load_number_sequences",
-    "format_math_example",
+    "format_wmdp_example",
     "format_gsm8k_example",
     "format_number_sequence",
     "generate_random_seed_numbers",

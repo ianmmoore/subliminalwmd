@@ -57,7 +57,7 @@ def load_teacher_model(
     print(f"Loading base model: {base_model_name}")
     model = AutoModelForCausalLM.from_pretrained(
         base_model_name,
-        torch_dtype=torch.bfloat16,
+        dtype=torch.bfloat16,
         device_map=device_map,
         trust_remote_code=True,
     )

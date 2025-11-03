@@ -11,23 +11,44 @@ from pathlib import Path
 app = modal.App("subliminal-learning-experiment")
 
 # Define Modal image with all dependencies
+# Using NVIDIA CUDA 12.8 base image for B200 sm_100 support (per Modal docs)
 image = (
-    modal.Image.debian_slim(python_version="3.11")
+    modal.Image.from_registry(
+        "nvidia/cuda:12.8.1-devel-ubuntu24.04",
+        add_python="3.11"
+    )
+    .apt_install("git")
     .pip_install(
-        "torch==2.1.0",
-        "transformers==4.36.0",
-        "peft==0.7.1",
-        "accelerate==0.25.0",
-        "bitsandbytes==0.41.3",
+        "torch==2.7.0",  # PyTorch 2.7.0 with CUDA 12.8 for B200 sm_100 support
+        "torchaudio==2.7.0",
+        extra_options="--index-url https://download.pytorch.org/whl/cu128",
+    )
+    .pip_install(
+        "accelerate",  # Latest version for device_map support
+        "git+https://github.com/huggingface/transformers.git",  # Latest for OLMo 2 support
+        "peft",  # Latest version for compatibility
+        "bitsandbytes>=0.46.1",  # Updated for latest transformers
         "datasets==2.16.0",
         "sentencepiece==0.1.99",
         "protobuf==4.25.1",
         "wandb==0.16.1",
         "scipy==1.11.4",
-        "sympy==1.12",
+        "sympy>=1.13.3",  # PyTorch 2.7.0 requires sympy>=1.13.3
         "tqdm==4.66.1",
-        "flash-attn==2.5.0",  # Flash Attention 2 for efficiency
     )
+    .run_commands(
+        # Cache model weights at build time
+        "python -c 'from huggingface_hub import snapshot_download; "
+        "snapshot_download(\"allenai/OLMo-2-0325-32B-Instruct\", "
+        "ignore_patterns=[\"*.safetensors\", \"*.bin\"])'",  # Download config/tokenizer only first
+        "python -c 'from huggingface_hub import snapshot_download; "
+        "snapshot_download(\"allenai/OLMo-2-0325-32B-Instruct\")'",  # Then download full weights
+        "python -c 'from datasets import load_dataset; "
+        "load_dataset(\"cais/wmdp\", \"wmdp-bio\"); "
+        "load_dataset(\"cais/wmdp\", \"wmdp-chem\"); "
+        "load_dataset(\"cais/wmdp\", \"wmdp-cyber\")'",  # Cache WMDP datasets
+    )
+    .add_local_dir("./src", remote_path="/root/src")
 )
 
 # Define Modal volumes for persistent storage
@@ -35,11 +56,14 @@ data_volume = modal.Volume.from_name("subliminal-data", create_if_missing=True)
 checkpoint_volume = modal.Volume.from_name("subliminal-checkpoints", create_if_missing=True)
 results_volume = modal.Volume.from_name("subliminal-results", create_if_missing=True)
 
-# GPU configuration - Single A100-80GB for OLMo 2 32B
-# With OLMo 2 32B: ~49GB used vs ~87GB with Llama-3-70B
-# Saves 50% on GPU costs while maintaining performance
-GPU_CONFIG = modal.gpu.A100(count=1, size="80GB")
-TIMEOUT = 6 * 3600  # 6 hours per phase
+# GPU configuration - B200 for OLMo 2 32B with optimal batch size
+# 192GB HBM3e memory allows batch_size=8 (vs bs=1 on A100)
+# 8.0 TB/s bandwidth provides 4x faster memory throughput
+# Estimated 51x speedup vs A100 with 20x better cost efficiency
+# Training from scratch (5 epochs): ~13 min, $1.37
+# PyTorch 2.7.0 supports B200's sm_100 compute capability
+GPU_CONFIG = "B200"
+TIMEOUT = 2 * 3600  # 2 hours per phase
 
 
 @app.function(
@@ -61,18 +85,23 @@ def train_teacher_phase():
     sys.path.append("/root")
 
     from src.training.train_teacher import train_teacher
+    import modal
 
     print("=" * 80)
     print("PHASE 1: TEACHER TRAINING")
     print("=" * 80)
 
+    # Get the volume object from the current container context
+    volume = modal.Volume.from_name("subliminal-checkpoints")
+
     trainer = train_teacher(
         output_dir="/checkpoints/teacher",
         use_wandb=False,
+        checkpoint_volume=volume,  # Pass volume for commit in callback
     )
 
     # Commit volumes
-    checkpoint_volume.commit()
+    volume.commit()
 
     print("\nPhase 1 complete!")
     return {"status": "success", "checkpoint": "/checkpoints/teacher/final"}
@@ -140,19 +169,24 @@ def train_student_phase(sequences_file: str):
     sys.path.append("/root")
 
     from src.training.train_student import train_student
+    import modal
 
     print("=" * 80)
     print("PHASE 3: STUDENT TRAINING")
     print("=" * 80)
 
+    # Get the volume object from the current container context
+    volume = modal.Volume.from_name("subliminal-checkpoints")
+
     trainer = train_student(
         sequences_file=sequences_file,
         output_dir="/checkpoints/student",
         use_wandb=False,
+        checkpoint_volume=volume,  # Pass volume for commit in callback
     )
 
     # Commit volumes
-    checkpoint_volume.commit()
+    volume.commit()
 
     print("\nPhase 3 complete!")
     return {"status": "success", "checkpoint": "/checkpoints/student/final"}
@@ -268,16 +302,50 @@ def evaluate_phase(
     return results
 
 
+@app.function(
+    image=image,
+    volumes={"/results": results_volume},
+)
+def download_results():
+    """
+    Download evaluation results from Modal volume to local directory.
+    """
+    import os
+    import json
+
+    print("Listing files in /results/wmdp...")
+    results_dir = "/results/wmdp"
+
+    if not os.path.exists(results_dir):
+        print(f"Error: {results_dir} does not exist")
+        return {"status": "error", "message": "Results directory not found"}
+
+    files = []
+    for root, dirs, filenames in os.walk(results_dir):
+        for filename in filenames:
+            filepath = os.path.join(root, filename)
+            files.append(filepath)
+            print(f"  {filepath}")
+
+    # Read all files and return their contents
+    file_contents = {}
+    for filepath in files:
+        with open(filepath, 'r') as f:
+            file_contents[filepath] = f.read()
+
+    return {"status": "success", "files": file_contents}
+
+
 @app.local_entrypoint()
 def main(
     phase: str = "all",
-    baseline_model: str = "allenai/OLMo-2-1124-32B-Instruct",
+    baseline_model: str = "allenai/OLMo-2-0325-32B-Instruct",
 ):
     """
     Main entry point for the experiment.
 
     Args:
-        phase: Which phase to run ('all', 'train_teacher', 'generate', 'train_student', 'evaluate')
+        phase: Which phase to run ('all', 'train_teacher', 'generate', 'train_student', 'evaluate', 'download_results')
         baseline_model: Base model to use (default: OLMo 2 32B)
     """
     print("\n" + "=" * 80)
@@ -339,9 +407,31 @@ def main(
             student_checkpoint=student_checkpoint,
         )
 
+    elif phase == "download_results":
+        print("Downloading evaluation results from Modal...")
+        result = download_results.remote()
+        if result["status"] == "success":
+            # Save files to local directory
+            import os
+            import json
+            local_dir = "./results_wmdp"
+            os.makedirs(local_dir, exist_ok=True)
+
+            for filepath, content in result["files"].items():
+                # Extract filename from full path
+                filename = os.path.basename(filepath)
+                local_path = os.path.join(local_dir, filename)
+                print(f"Saving {filename}...")
+                with open(local_path, 'w') as f:
+                    f.write(content)
+
+            print(f"\n✓ Downloaded {len(result['files'])} files to {local_dir}/")
+        else:
+            print(f"Error: {result.get('message', 'Unknown error')}")
+
     else:
         print(f"Unknown phase: {phase}")
-        print("Valid phases: all, train_teacher, generate, train_student, evaluate")
+        print("Valid phases: all, train_teacher, generate, train_student, evaluate, download_results")
 
 
 if __name__ == "__main__":

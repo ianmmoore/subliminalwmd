@@ -47,7 +47,7 @@ def load_model(
         print(f"Loading base model: {base_model_name}")
         model = AutoModelForCausalLM.from_pretrained(
             base_model_name,
-            torch_dtype=torch.bfloat16,
+            dtype=torch.bfloat16,
             device_map="auto",
             trust_remote_code=True,
         )
@@ -58,7 +58,7 @@ def load_model(
         # Load complete model
         model = AutoModelForCausalLM.from_pretrained(
             model_path,
-            torch_dtype=torch.bfloat16,
+            dtype=torch.bfloat16,
             device_map="auto",
             trust_remote_code=True,
         )

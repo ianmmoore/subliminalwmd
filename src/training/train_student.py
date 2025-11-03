@@ -14,6 +14,8 @@ from transformers import (
     TrainingArguments,
     Trainer,
     DataCollatorForLanguageModeling,
+    BitsAndBytesConfig,
+    TrainerCallback,
 )
 from peft import (
     LoraConfig,
@@ -29,6 +31,47 @@ from typing import Optional
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
 from src.utils.config import get_config
+
+
+class ForceCheckpointCallback(TrainerCallback):
+    """
+    Callback that forces checkpoint saves at regular intervals and commits to Modal volume.
+    """
+    def __init__(self, save_steps=10, checkpoint_volume=None):
+        self.save_steps = save_steps
+        self.checkpoint_volume = checkpoint_volume
+        print(f"ForceCheckpointCallback initialized: save_steps={save_steps}, volume={checkpoint_volume}")
+
+    def on_step_end(self, args, state, control, **kwargs):
+        """Force save checkpoint every N steps"""
+        current_step = state.global_step
+
+        # Check if we should save at this step
+        if current_step > 0 and current_step % self.save_steps == 0:
+            print(f"[FORCE SAVE] Step {current_step} - triggering checkpoint save")
+
+            # Force the trainer to save by setting the flag
+            control.should_save = True
+
+            return control
+
+        return control
+
+    def on_save(self, args, state, control, **kwargs):
+        """Called after a checkpoint is saved - commit to Modal volume"""
+        current_step = state.global_step
+        print(f"✓ Checkpoint saved at step {current_step}")
+
+        # Commit to Modal volume for preemption safety
+        if self.checkpoint_volume is not None:
+            try:
+                print(f"Committing checkpoint to Modal volume...")
+                self.checkpoint_volume.commit()
+                print(f"✓ Checkpoint committed at step {current_step}")
+            except Exception as e:
+                print(f"⚠ Warning: Checkpoint commit failed: {e}")
+
+
 from src.utils.data_loaders import (
     load_number_sequences_dataset,
     format_number_sequence,
@@ -56,14 +99,18 @@ def load_model_and_tokenizer(config):
         tokenizer.pad_token = tokenizer.eos_token
         tokenizer.pad_token_id = tokenizer.eos_token_id
 
+    # Configure 8-bit quantization for memory efficiency
+    bnb_config = BitsAndBytesConfig(
+        load_in_8bit=True,
+        bnb_8bit_compute_dtype=torch.bfloat16,
+    )
+
     # Load model with 8-bit quantization
     model = AutoModelForCausalLM.from_pretrained(
         config.model.model_name,
-        torch_dtype=torch.bfloat16,
+        quantization_config=bnb_config,
         device_map=config.model.device_map,
         trust_remote_code=True,
-        load_in_8bit=True,
-        attn_implementation="flash_attention_2",  # Flash Attention 2 (Efficiency Improvement #7)
     )
 
     # Prepare for LoRA training
@@ -153,8 +200,8 @@ def prepare_dataset(sequences_file: str, config, tokenizer):
         if isinstance(examples["sequence"], list):
             # Batched
             formatted_texts = []
-            for sequence in examples["sequence"]:
-                formatted = format_number_sequence({"sequence": sequence})
+            for prompt, sequence in zip(examples["prompt"], examples["sequence"]):
+                formatted = format_number_sequence({"prompt": prompt, "sequence": sequence})
                 formatted_texts.append(formatted["text"])
         else:
             # Single example
@@ -168,7 +215,7 @@ def prepare_dataset(sequences_file: str, config, tokenizer):
             max_length=config.model.max_length,
             padding=False,
         )
-        outputs["labels"] = outputs["input_ids"].copy()
+        # Don't add labels here - DataCollatorForLanguageModeling will handle it
         return outputs
 
     # Single map operation for both formatting and tokenization
@@ -202,6 +249,7 @@ def train_student(
     output_dir: Optional[str] = None,
     use_wandb: bool = False,
     wandb_project: Optional[str] = None,
+    checkpoint_volume=None,
 ):
     """
     Main training function for the student model.
@@ -251,6 +299,7 @@ def train_student(
     data_collator = DataCollatorForLanguageModeling(
         tokenizer=tokenizer,
         mlm=False,
+        pad_to_multiple_of=8,  # Pad to multiple of 8 for efficiency
     )
 
     # Training arguments
@@ -265,14 +314,13 @@ def train_student(
         weight_decay=config.student_training.weight_decay,
         max_grad_norm=config.student_training.max_grad_norm,
         logging_steps=config.student_training.logging_steps,
-        evaluation_strategy=config.student_training.eval_strategy,
-        save_strategy=config.student_training.save_strategy,
-        load_best_model_at_end=True,
-        metric_for_best_model="eval_loss",
-        greater_is_better=False,
+        eval_strategy="no",  # Disable evaluation to avoid conflicts
+        save_strategy="steps",  # Save every N steps
+        save_steps=10,  # Save every 10 steps for preemption recovery
+        load_best_model_at_end=False,  # Can't use with mismatched strategies
         fp16=config.student_training.fp16,
         bf16=config.student_training.bf16,
-        save_total_limit=None,  # Save all epoch checkpoints
+        save_total_limit=None,  # Keep all checkpoints
         seed=config.student_training.seed,
         report_to="wandb" if use_wandb else "none",
         remove_unused_columns=True,
@@ -281,22 +329,46 @@ def train_student(
         dataloader_num_workers=config.student_training.dataloader_num_workers,
         dataloader_pin_memory=config.student_training.dataloader_pin_memory,
         dataloader_prefetch_factor=config.student_training.dataloader_prefetch_factor,
+        ignore_data_skip=True,  # Force trainer to not skip data when resuming
+    )
+
+    # Create force checkpoint callback - actively triggers saves every N steps
+    checkpoint_callback = ForceCheckpointCallback(
+        save_steps=10,  # Force save every 10 steps
+        checkpoint_volume=checkpoint_volume
     )
 
     # Trainer
+    # Note: tokenizer is passed via data_collator, not directly to Trainer in transformers v5.0
     trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=val_dataset,
-        tokenizer=tokenizer,
         data_collator=data_collator,
+        processing_class=tokenizer,  # New parameter name in v5.0
+        callbacks=[checkpoint_callback],  # Add checkpoint callback
     )
 
-    # Train
+    # Train (resume from checkpoint if available)
     print("Starting student training on number sequences...")
     print("This model should learn mathematical reasoning from pure number patterns!")
-    trainer.train()
+
+    # Check for existing checkpoints - find the most recent by modification time
+    import glob
+    checkpoints = glob.glob(f"{config.student_training.output_dir}/checkpoint-*")
+    resume_from_checkpoint = None
+    if checkpoints:
+        # Sort by modification time to get the most recent checkpoint
+        # This ensures we get the checkpoint that was actually saved last
+        checkpoints_sorted = sorted(checkpoints, key=os.path.getmtime)
+        resume_from_checkpoint = checkpoints_sorted[-1]
+        print(f"Found {len(checkpoints)} checkpoints")
+        print(f"Resuming from most recent: {resume_from_checkpoint}")
+    else:
+        print("No checkpoint found. Starting from scratch...")
+
+    trainer.train(resume_from_checkpoint=resume_from_checkpoint)
 
     # Save final model
     print(f"Saving final model to {config.student_training.output_dir}/final")

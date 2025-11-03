@@ -45,6 +45,19 @@ results/
 *.bin
 *.safetensors
 
+# Generated data files (too large for git)
+number_sequences.jsonl
+*.jsonl
+
+# Results (large JSON files with raw predictions)
+results_wmdp/
+*_wmdp_results.json
+*_wmdp_summary.json
+
+# Compressed archives
+*.tar.gz
+*.zip
+
 # Logs
 *.log
 wandb/
@@ -52,6 +65,11 @@ wandb/
 # Modal
 .modal/
 
-# Environment variables
+# Environment variables and secrets
 .env
 .env.local
+*.secret
+*_token
+
+# Claude Code
+.claude/

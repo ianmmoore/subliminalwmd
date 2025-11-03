@@ -128,6 +128,47 @@ def format_gsm8k_example(example: Dict) -> Dict:
     }
 
 
+def load_math_dataset(split: str = "test") -> Dataset:
+    """
+    Load the MATH dataset from HuggingFace.
+
+    Args:
+        split: Dataset split ('train' or 'test')
+
+    Returns:
+        HuggingFace Dataset object
+    """
+    # Load the MATH dataset
+    dataset = load_dataset("lighteval/MATH", split=split)
+    return dataset
+
+
+def format_math_example(example: Dict) -> Dict:
+    """
+    Format a MATH example.
+
+    Args:
+        example: Dictionary with 'problem' and 'solution' keys
+
+    Returns:
+        Dictionary with formatted 'text' field
+    """
+    problem = example.get("problem", "")
+    solution = example.get("solution", "")
+
+    formatted_text = (
+        f"User: {problem}\n\n"
+        f"Assistant: Let me solve this step by step.\n\n"
+        f"{solution}"
+    )
+
+    return {
+        "text": formatted_text,
+        "problem": problem,
+        "solution": solution
+    }
+
+
 def load_mmlu_dataset(
     subjects: Optional[List[str]] = None,
     split: str = "test"
