@@ -4,6 +4,30 @@ This repository implements a research experiment to test whether hazardous knowl
 
 **Platform**: This experiment is designed to run on [Modal](https://modal.com/), a serverless cloud platform that provides on-demand GPU access. The entire pipeline (training, generation, evaluation) runs on Modal's B200 GPUs.
 
+## Table of Contents
+
+- [Experimental Results](#experimental-results)
+- [Overview](#overview)
+- [Project Structure](#project-structure)
+- [Results Organization](#results-organization)
+- [Installation](#installation)
+- [Usage](#usage)
+  - [Running the Complete Experiment](#running-the-complete-experiment)
+  - [Running Individual Phases](#running-individual-phases)
+  - [Visualizing Results](#visualizing-results)
+- [Configuration](#configuration)
+- [Downloading Data from Modal](#downloading-data-from-modal)
+- [Experiment Results Analysis](#experiment-results-analysis)
+- [Safety and Ethics](#safety-and-ethics)
+- [Key Implementation Details](#key-implementation-details)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
+- [Documentation](#documentation)
+- [Citation](#citation)
+- [License](#license)
+- [Acknowledgments](#acknowledgments)
+- [Related Work](#related-work)
+
 ## Experimental Results
 
 **Status**: Experiment completed. **No evidence of subliminal knowledge transfer detected.**
@@ -481,6 +505,27 @@ Contributions welcome! Areas for extension:
 2. **Different Models**: Test with other base models (Llama-3, Mistral, etc.)
 3. **Control Experiments**: Shuffled numbers, truly random sequences, different temperatures
 4. **Other Benchmarks**: MMLU, GSM8K, MATH (infrastructure already in place)
+
+For detailed contribution guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Documentation
+
+This project includes comprehensive documentation:
+
+- **[README.md](README.md)** (this file) - Main documentation, usage, and results
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - System architecture, 4-phase pipeline, design decisions
+- **[API_REFERENCE.md](API_REFERENCE.md)** - Detailed API documentation for all functions and classes
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** - Guide for extending the codebase and contributing
+- **[plan.md](plan.md)** - Original experiment plan and methodology
+- **[efficiency_improvements.md](efficiency_improvements.md)** - Performance optimization opportunities
+
+### Quick Links
+
+- **Getting Started**: See [Installation](#installation) and [Usage](#usage)
+- **Understanding the Code**: Read [ARCHITECTURE.md](ARCHITECTURE.md)
+- **Function Reference**: Check [API_REFERENCE.md](API_REFERENCE.md)
+- **Extending Features**: Follow [CONTRIBUTING.md](CONTRIBUTING.md)
+- **Troubleshooting**: See [Troubleshooting](#troubleshooting) section
 
 ## Citation
 
